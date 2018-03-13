@@ -4,40 +4,6 @@ import Connection, {connections} from './Connection';
 
 let neurons = 0;
 
-// squashing functions
-const squash = {
-// eq. 5 & 5'
-  LOGISTIC: function (x, derivate) {
-    if (!derivate)
-      return 1 / (1 + Math.exp(-x));
-    else
-      return 1 / (1 + Math.exp(-x)) * (1 - 1 / (1 + Math.exp(-x)));
-  },
-
-  TANH: function (x, derivate) {
-    if (derivate)
-      return 1 - Math.pow(Math.tanh(x), 2);
-    else
-      return Math.tanh(x);
-  },
-
-  IDENTITY: function (x, derivate) {
-    return derivate ? 1 : x;
-  },
-
-  HLIM: function (x, derivate) {
-    return derivate ? 1 : x > 0 ? 1 : 0;
-  },
-
-  RELU: function (x, derivate) {
-    if (derivate)
-      return x > 0 ? 1 : 0;
-    else
-      return x > 0 ? x : 0;
-  }
-};
-
-
 export default class Neuron {
   constructor() {
     this.ID = Neuron.uid();
@@ -68,8 +34,6 @@ export default class Neuron {
     this.neighboors = {};
     this.bias = Math.random() * .2 - .1;
   }
-
-  static squash = squash;
 
   // activate the neuron
   activate(input) {
@@ -366,86 +330,95 @@ export default class Neuron {
     // characteristics of the neuron
     this._noProjections = this.isEmpty(this.connections.projected);
     this._noGates = this.isEmpty(this.connections.gated);
-    var isInput = layer == 'input' ? true : this.isEmpty(this.connections.inputs);
-    var isOutput = layer == 'output' ? true : this._noProjections && this._noGates;
+    this._isInput = layer == 'input' ? true : this.isEmpty(this.connections.inputs);
+    this._isOutput = layer == 'output' ? true : this._noProjections && this._noGates;
 
     // optimize neuron's behaviour
-    var rate = this.getVar('rate');
-    var activation = this.getVar(this, 'activation');
-    if (isInput)
-      this._inputs.push(activation.id);
+    this._rate = this.getVar('rate');
+    this._activation = this.getVar(this, 'activation');
+    if (this._isInput)
+      this._inputs.push(this._activation.id);
     else {
       this._activation_sentences[this._currentLayer].push(this._store_activation);
       this._trace_sentences[this._currentLayer].push(this._store_trace);
       this._propagation_sentences[this._currentLayer].push(this._store_propagation);
-      var old = this.getVar(this, 'old');
-      var state = this.getVar(this, 'state');
-      var bias = this.getVar(this, 'bias');
+      this._old = this.getVar(this, 'old');
+      this._state = this.getVar(this, 'state');
+      this._bias = this.getVar(this, 'bias');
+
       if (this.selfconnection.gater)
-        var self_gain = this.getVar(this.selfconnection, 'gain');
+        this._self_gain = this.getVar(this.selfconnection, 'gain');
+
       if (this.selfconnected())
-        var self_weight = this.getVar(this.selfconnection, 'weight');
-      this.buildSentence(old, ' = ', state, this._store_activation);
+        this._self_weight = this.getVar(this.selfconnection, 'weight');
+
+      this.buildSentence(this._old, ' = ', this._state, this._store_activation);
+
       if (this.selfconnected())
         if (this.selfconnection.gater)
-          this.buildSentence(state, ' = ', self_gain, ' * ', self_weight, ' * ',
-            state, ' + ', bias, this._store_activation);
+          this.buildSentence(this._state, ' = ', this._self_gain, ' * ', this._self_weight, ' * ', this._state, ' + ', this._bias, this._store_activation);
         else
-          this.buildSentence(state, ' = ', self_weight, ' * ', state, ' + ',
-            bias, this._store_activation);
+          this.buildSentence(this._state, ' = ', this._self_weight, ' * ', this._, ' + ', this._bias, this._store_activation);
       else
-        this.buildSentence(state, ' = ', bias, this._store_activation);
-      for (var i in this.connections.inputs) {
-        var input = this.connections.inputs[i];
-        var input_activation = this.getVar(input.from, 'activation');
-        var input_weight = this.getVar(input, 'weight');
-        if (input.gater)
-          var input_gain = this.getVar(input, 'gain');
-        if (this.connections.inputs[i].gater)
-          this.buildSentence(state, ' += ', input_activation, ' * ',
-            input_weight, ' * ', input_gain, this._store_activation);
+        this.buildSentence(this._state, ' = ', this._bias, this._store_activation);
+
+      for (this._i in this.connections.inputs) {
+        this._input = this.connections.inputs[this._i];
+        this._input_activation = this.getVar(this._input.from, 'activation');
+        this._input_weight = this.getVar(this._input, 'weight');
+
+        if (this._input.gater)
+          this._input_gain = this.getVar(this._input, 'gain');
+
+        if (this.connections.inputs[this._i].gater)
+          this.buildSentence(this._state, ' += ', this._input_activation, ' * ', this._input_weight, ' * ', this._input_gain, this._store_activation);
         else
-          this.buildSentence(state, ' += ', input_activation, ' * ',
-            input_weight, this._store_activation);
+          this.buildSentence(this._state, ' += ', this._input_activation, ' * ', this._input_weight, this._store_activation);
       }
-      var derivative = this.getVar(this, 'derivative');
+      this._derivative = this.getVar(this, 'derivative');
 
       switch (this.squash) {
         case Neuron.squash.LOGISTIC:
-          this.buildSentence(activation, ' = (1 / (1 + Math.exp(-', state, ')))',
-            this._store_activation);
-          this.buildSentence(derivative, ' = ', activation, ' * (1 - ',
-            activation, ')', this._store_activation);
+          this.buildSentence(this._activation, ' = (1 / (1 + Math.exp(-', this._state, ')))', this._store_activation);
+          this.buildSentence(
+            this._derivative,
+            ' = ',
+            this._activation,
+            ' * (1 - ',
+            this._activation,
+            ')',
+            this._store_activation
+          );
           break;
 
         case Neuron.squash.TANH:
-          var eP = this.getVar('aux');
-          var eN = this.getVar('aux_2');
-          this.buildSentence(eP, ' = Math.exp(', state, ')', this._store_activation);
-          this.buildSentence(eN, ' = 1 / ', eP, this._store_activation);
-          this.buildSentence(activation, ' = (', eP, ' - ', eN, ') / (', eP, ' + ', eN, ')', this._store_activation);
-          this.buildSentence(derivative, ' = 1 - (', activation, ' * ', activation, ')', this._store_activation);
+          this._eP = this.getVar('aux');
+          this._eN = this.getVar('aux_2');
+          this.buildSentence(this._eP, ' = Math.exp(', this._state, ')', this._store_activation);
+          this.buildSentence(this._eN, ' = 1 / ', this._eP, this._store_activation);
+          this.buildSentence(this._activation, ' = (', this._eP, ' - ', this._eN, ') / (', this._eP, ' + ', this._eN, ')', this._store_activation);
+          this.buildSentence(this._derivative, ' = 1 - (', this._activation, ' * ', this._activation, ')', this._store_activation);
           break;
 
         case Neuron.squash.IDENTITY:
-          this.buildSentence(activation, ' = ', state, this._store_activation);
-          this.buildSentence(derivative, ' = 1', this._store_activation);
+          this.buildSentence(this._activation, ' = ', this._state, this._store_activation);
+          this.buildSentence(this._derivative, ' = 1', this._store_activation);
           break;
 
         case Neuron.squash.HLIM:
-          this.buildSentence(activation, ' = +(', state, ' > 0)', this._store_activation);
-          this.buildSentence(derivative, ' = 1', this._store_activation);
+          this.buildSentence(this._activation, ' = +(', this._state, ' > 0)', this._store_activation);
+          this.buildSentence(this._derivative, ' = 1', this._store_activation);
           break;
 
         case Neuron.squash.RELU:
-          this.buildSentence(activation, ' = ', state, ' > 0 ? ', state, ' : 0', this._store_activation);
-          this.buildSentence(derivative, ' = ', state, ' > 0 ? 1 : 0', this._store_activation);
+          this.buildSentence(this._activation, ' = ', this._state, ' > 0 ? ', this._state, ' : 0', this._store_activation);
+          this.buildSentence(this._derivative, ' = ', this._state, ' > 0 ? 1 : 0', this._store_activation);
           break;
       }
 
-      for (var id in this.trace.extended) {
+      for (this._id in this.trace.extended) {
         // calculate extended elegibility traces in advance
-        this._neuron = this.neighboors[id];
+        this._neuron = this.neighboors[this._id];
         this._influence = this.getVar('influences[' + this._neuron.ID + ']');
         this._neuron_old = this.getVar(this._neuron, 'old');
         this._initialized = false;
@@ -466,146 +439,201 @@ export default class Neuron {
         }
       }
 
-      for (var i in this.connections.inputs) {
-        var input = this.connections.inputs[i];
-        if (input.gater)
-          var input_gain = this.getVar(input, 'gain');
-        var input_activation = this.getVar(input.from, 'activation');
-        var trace = this.getVar(this, 'trace', 'elegibility', input.ID, this.trace
-          .elegibility[input.ID]);
+      for (this._i in this.connections.inputs) {
+        this._input = this.connections.inputs[this._i];
+
+        if (this._input.gater)
+          this._input_gain = this.getVar(this._input, 'gain');
+
+        this._input_activation = this.getVar(this._input.from, 'activation');
+        this._trace = this.getVar(this, 'trace', 'elegibility', this._input.ID, this.trace.elegibility[this._input.ID]);
+
         if (this.selfconnected()) {
           if (this.selfconnection.gater) {
-            if (input.gater)
-              this.buildSentence(trace, ' = ', self_gain, ' * ', self_weight,
-                ' * ', trace, ' + ', input_gain, ' * ', input_activation,
-                this._store_trace);
+            if (this._input.gater)
+              this.buildSentence(
+                this._trace,
+                ' = ',
+                this._self_gain,
+                ' * ',
+                this._self_weight,
+                ' * ',
+                this._trace,
+                ' + ',
+                this._input_gain,
+                ' * ',
+                this._input_activation,
+                this._store_trace
+              );
             else
-              this.buildSentence(trace, ' = ', self_gain, ' * ', self_weight,
-                ' * ', trace, ' + ', input_activation, this._store_trace);
+              this.buildSentence(
+                this._trace,
+                ' = ',
+                this._self_gain,
+                ' * ',
+                this._self_weight,
+                ' * ',
+                this._trace,
+                ' + ',
+                this._input_activation,
+                this._store_trace
+              );
           } else {
-            if (input.gater)
-              this.buildSentence(trace, ' = ', self_weight, ' * ', trace, ' + ',
-                input_gain, ' * ', input_activation, this._store_trace);
+            if (this._input.gater)
+              this.buildSentence(
+                this._trace,
+                ' = ',
+                this._self_weight,
+                ' * ',
+                this._trace,
+                ' + ',
+                this._input_gain,
+                ' * ',
+                this._input_activation,
+                this._store_trace
+              );
             else
-              this.buildSentence(trace, ' = ', self_weight, ' * ', trace, ' + ',
-                input_activation, this._store_trace);
+              this.buildSentence(this._trace, ' = ', this._self_weight, ' * ', this._trace, ' + ', this._input_activation, this._store_trace);
           }
         } else {
-          if (input.gater)
-            this.buildSentence(trace, ' = ', input_gain, ' * ', input_activation,
-              this._store_trace);
+          if (this._input.gater)
+            this.buildSentence(this._trace, ' = ', this._input_gain, ' * ', this._input_activation, this._store_trace);
           else
-            this.buildSentence(trace, ' = ', input_activation, this._store_trace);
+            this.buildSentence(this._trace, ' = ', this._input_activation, this._store_trace);
         }
-        for (var id in this.trace.extended) {
+        for (this._id in this.trace.extended) {
           // extended elegibility trace
-          var neuron = this.neighboors[id];
-          var influence = this.getVar('influences[' + neuron.ID + ']');
+          this._neuron = this.neighboors[this._id];
+          this._influence = this.getVar('influences[' + this._neuron.ID + ']');
 
-          var trace = this.getVar(this, 'trace', 'elegibility', input.ID, this.trace
-            .elegibility[input.ID]);
-          var xtrace = this.getVar(this, 'trace', 'extended', neuron.ID, input.ID,
-            this.trace.extended[neuron.ID][input.ID]);
-          if (neuron.selfconnected())
-            var neuron_self_weight = this.getVar(neuron.selfconnection, 'weight');
-          if (neuron.selfconnection.gater)
-            var neuron_self_gain = this.getVar(neuron.selfconnection, 'gain');
-          if (neuron.selfconnected())
-            if (neuron.selfconnection.gater)
-              this.buildSentence(xtrace, ' = ', neuron_self_gain, ' * ',
-                neuron_self_weight, ' * ', xtrace, ' + ', derivative, ' * ',
-                trace, ' * ', influence, this._store_trace);
+          this._trace = this.getVar(this, 'trace', 'elegibility', this._input.ID, this.trace.elegibility[this._input.ID]);
+          this._xtrace = this.getVar(this, 'trace', 'extended', this._neuron.ID, this._input.ID, this.trace.extended[this._neuron.ID][this._input.ID]);
+
+          if (this._neuron.selfconnected())
+            this._neuron_self_weight = this.getVar(this._neuron.selfconnection, 'weight');
+
+          if (this._neuron.selfconnection.gater)
+            this._neuron_self_gain = this.getVar(this._neuron.selfconnection, 'gain');
+
+          if (this._neuron.selfconnected())
+            if (this._neuron.selfconnection.gater)
+              this.buildSentence(
+                this._xtrace,
+                ' = ',
+                this._neuron_self_gain,
+                ' * ',
+                this._neuron_self_weight,
+                ' * ',
+                this._xtrace,
+                ' + ',
+                this._derivative,
+                ' * ',
+                this._trace,
+                ' * ',
+                this._influence,
+                this._store_trace
+              );
             else
-              this.buildSentence(xtrace, ' = ', neuron_self_weight, ' * ',
-                xtrace, ' + ', derivative, ' * ', trace, ' * ',
-                influence, this._store_trace);
+              this.buildSentence(
+                this._xtrace,
+                ' = ',
+                this._neuron_self_weight,
+                ' * ',
+                this._xtrace,
+                ' + ',
+                this._derivative,
+                ' * ',
+                this._trace,
+                ' * ',
+                this._influence,
+                this._store_trace
+              );
           else
-            this.buildSentence(xtrace, ' = ', derivative, ' * ', trace, ' * ',
-              influence, this._store_trace);
+            this.buildSentence(this._xtrace, ' = ', this._derivative, ' * ', this._trace, ' * ', this._influence, this._store_trace);
         }
       }
-      for (var connection in this.connections.gated) {
-        var gated_gain = this.getVar(this.connections.gated[connection], 'gain');
-        this.buildSentence(gated_gain, ' = ', activation, this._store_activation);
+      for (this._connection in this.connections.gated) {
+        this._gated_gain = this.getVar(this.connections.gated[this._connection], 'gain');
+        this.buildSentence(this._gated_gain, ' = ', this._activation, this._store_activation);
       }
     }
-    if (!isInput) {
-      var responsibility = this.getVar(this, 'error', 'responsibility', this.error
-        .responsibility);
-      if (isOutput) {
-        var target = this.getVar('target');
-        this.buildSentence(responsibility, ' = ', target, ' - ', activation,
+    if (!this._isInput) {
+      this._responsibility = this.getVar(this, 'error', 'responsibility', this.error.responsibility);
+      if (this._isOutput) {
+        this._target = this.getVar('target');
+        this.buildSentence(this._responsibility, ' = ', this._target, ' - ', this._activation,
           this._store_propagation);
-        for (var id in this.connections.inputs) {
-          var input = this.connections.inputs[id];
-          var trace = this.getVar(this, 'trace', 'elegibility', input.ID, this.trace
-            .elegibility[input.ID]);
-          var input_weight = this.getVar(input, 'weight');
-          this.buildSentence(input_weight, ' += ', rate, ' * (', responsibility,
-            ' * ', trace, ')', this._store_propagation);
+        for (this._id in this.connections.inputs) {
+          this._input = this.connections.inputs[this._id];
+          this._trace = this.getVar(this, 'trace', 'elegibility', this._input.ID, this.trace.elegibility[this._input.ID]);
+          this._input_weight = this.getVar(this._input, 'weight');
+          this.buildSentence(this._input_weight, ' += ', this._rate, ' * (', this._responsibility, ' * ', this._trace, ')', this._store_propagation);
         }
-        this._outputs.push(activation.id);
+        this._outputs.push(this._activation.id);
       } else {
         if (!this._noProjections && !this._noGates) {
-          var error = this.getVar('aux');
+          this._error = this.getVar('aux');
           for (this._id in this.connections.projected) {
-            var connection = this.connections.projected[this._id];
-            var neuron = connection.to;
-            var connection_weight = this.getVar(connection, 'weight');
-            this._neuron_responsibility = this.getVar(neuron, 'error', 'responsibility', neuron.error.responsibility);
-            if (connection.gater) {
-              var connection_gain = this.getVar(connection, 'gain');
+            this._connection = this.connections.projected[this._id];
+            this._neuron = this._connection.to;
+            this._connection_weight = this.getVar(this._connection, 'weight');
+            this._neuron_responsibility = this.getVar(this._neuron, 'error', 'responsibility', this._neuron.error.responsibility);
+            if (this._connection.gater) {
+              this._connection_gain = this.getVar(this._connection, 'gain');
               this.buildSentence(
-                error,
+                this._error,
                 ' += ',
                 this._neuron_responsibility,
                 ' * ',
-                connection_gain,
+                this._connection_gain,
                 ' * ',
-                connection_weight,
+                this._connection_weight,
                 this._store_propagation
               );
             } else
               this.buildSentence(
-                error,
+                this._error,
                 ' += ',
                 this._neuron_responsibility,
                 ' * ',
-                connection_weight,
+                this._connection_weight,
                 this._store_propagation
               );
           }
-          var projected = this.getVar(this, 'error', 'projected', this.error.projected);
-          this.buildSentence(projected, ' = ', derivative, ' * ', error,
-            this._store_propagation);
-          this.buildSentence(error, ' = 0', this._store_propagation);
+          this._projected = this.getVar(this, 'error', 'projected', this.error.projected);
+          this.buildSentence(this._projected, ' = ', this._derivative, ' * ', this._error, this._store_propagation);
+          this.buildSentence(this._error, ' = 0', this._store_propagation);
+
           for (this._id in this.trace.extended) {
-            var neuron = this.neighboors[this._id];
-            var influence = this.getVar('aux_2');
-            var neuron_old = this.getVar(neuron, 'old');
-            if (neuron.selfconnection.gater == this)
-              this.buildSentence(influence, ' = ', neuron_old, this._store_propagation);
+            this._neuron = this.neighboors[this._id];
+            this._influence = this.getVar('aux_2');
+            this._neuron_old = this.getVar(this._neuron, 'old');
+
+            if (this._neuron.selfconnection.gater == this)
+              this.buildSentence(this._influence, ' = ', this._neuron_old, this._store_propagation);
             else
-              this.buildSentence(influence, ' = 0', this._store_propagation);
-            for (var input in this.trace.influences[neuron.ID]) {
-              var connection = this.trace.influences[neuron.ID][input];
-              var connection_weight = this.getVar(connection, 'weight');
-              var neuron_activation = this.getVar(connection.from, 'activation');
-              this.buildSentence(influence, ' += ', connection_weight, ' * ',
-                neuron_activation, this._store_propagation);
+              this.buildSentence(this._influence, ' = 0', this._store_propagation);
+
+            for (this._input in this.trace.influences[this._neuron.ID]) {
+              this._connection = this.trace.influences[this._neuron.ID][this._input];
+              this._connection_weight = this.getVar(this._connection, 'weight');
+              this._neuron_activation = this.getVar(this._connection.from, 'activation');
+              this.buildSentence(this._influence, ' += ', connection_weight, ' * ', this._neuron_activation, this._store_propagation);
             }
+
             this._neuron_responsibility = this.getVar(
-              neuron,
+              this._neuron,
               'error',
               'responsibility',
-              neuron.error.responsibility
+              this._neuron.error.responsibility
             );
+
             this.buildSentence(
-              error,
+              this._error,
               ' += ',
               this._neuron_responsibility,
               ' * ',
-              influence,
+              this._influence,
               this._store_propagation
             );
           }
@@ -613,23 +641,23 @@ export default class Neuron {
           this.buildSentence(
             this._gated,
             ' = ',
-            derivative,
+            this._derivative,
             ' * ',
-            error,
+            this._error,
             this._store_propagation
           );
           this.buildSentence(
-            responsibility,
+            this._responsibility,
             ' = ',
-            projected,
+            this._projected,
             ' + ',
             this._gated,
             this._store_propagation
           );
           for (this._id in this.connections.inputs) {
             this._input = this.connections.inputs[this._id];
-            var gradient = this.getVar('aux');
-            var trace = this.getVar(
+            this._gradient = this.getVar('aux');
+            this._trace = this.getVar(
               this,
               'trace',
               'elegibility',
@@ -637,35 +665,35 @@ export default class Neuron {
               this.trace.elegibility[this._input.ID]
             );
             this.buildSentence(
-              gradient,
+              this._gradient,
               ' = ',
-              projected,
+              this._projected,
               ' * ',
-              trace,
+              this._trace,
               this._store_propagation
             );
             for (this._id in this.trace.extended) {
-              var neuron = this.neighboors[this._id];
-              var neuron_responsibility = this.getVar(
-                neuron,
+              this._neuron = this.neighboors[this._id];
+              this._neuron_responsibility = this.getVar(
+                this._neuron,
                 'error',
                 'responsibility',
-                neuron.error.responsibility
+                this._neuron.error.responsibility
               );
-              var xtrace = this.getVar(
+              this._xtrace = this.getVar(
                 this,
                 'trace',
                 'extended',
-                neuron.ID,
+                this._neuron.ID,
                 this._input.ID,
-                this.trace.extended[neuron.ID][this._input.ID]
+                this.trace.extended[this._neuron.ID][this._input.ID]
               );
               this.buildSentence(
-                gradient,
+                this._gradient,
                 ' += ',
-                neuron_responsibility,
+                this._neuron_responsibility,
                 ' * ',
-                xtrace,
+                this._xtrace,
                 this._store_propagation
               );
             }
@@ -673,45 +701,45 @@ export default class Neuron {
             this.buildSentence(
               this._input_weight,
               ' += ',
-              rate,
+              this._rate,
               ' * ',
-              gradient,
+              this._gradient,
               this._store_propagation
             );
           }
 
         } else if (this._noGates) {
-          this.buildSentence(responsibility, ' = 0', this._store_propagation);
+          this.buildSentence(this._responsibility, ' = 0', this._store_propagation);
           for (this._id in this.connections.projected) {
             this._connection = this.connections.projected[this._id];
-            var neuron = this._connection.to;
-            var connection_weight = this.getVar(this._connection, 'weight');
-            var neuron_responsibility = this.getVar(neuron, 'error', 'responsibility', neuron.error.responsibility);
+            this._neuron = this._connection.to;
+            this._connection_weight = this.getVar(this._connection, 'weight');
+            this._neuron_responsibility = this.getVar(this._neuron, 'error', 'responsibility', this._neuron.error.responsibility);
 
             if (this._connection.gater) {
-              var connection_gain = this.getVar(this._connection, 'gain');
+              this._connection_gain = this.getVar(this._connection, 'gain');
               this.buildSentence(
-                responsibility,
+                this._responsibility,
                 ' += ',
-                neuron_responsibility,
+                this._neuron_responsibility,
                 ' * ',
-                connection_gain,
+                this._connection_gain,
                 ' * ',
-                connection_weight,
+                this._connection_weight,
                 this._store_propagation
               );
             } else
               this.buildSentence(
-                responsibility,
+                this._responsibility,
                 ' += ',
-                neuron_responsibility,
+                this._neuron_responsibility,
                 ' * ',
-                connection_weight,
+                this._connection_weight,
                 this._store_propagation
               );
           }
 
-          this.buildSentence(responsibility, ' *= ', derivative,this._store_propagation);
+          this.buildSentence(this._responsibility, ' *= ', this._derivative,this._store_propagation);
 
           for (this._id in this.connections.inputs) {
             this._input = this.connections.inputs[this._id];
@@ -726,43 +754,49 @@ export default class Neuron {
             this.buildSentence(
               this._input_weight,
               ' += ',
-              rate,
+              this._rate,
               ' * (',
-              responsibility,
+              this._responsibility,
               ' * ',
               this._trace, ')',
               this._store_propagation
             );
           }
         } else if (this._noProjections) {
-          this.buildSentence(responsibility, ' = 0', this._store_propagation);
+          this.buildSentence(this._responsibility, ' = 0', this._store_propagation);
 
           for (this._id in this.trace.extended) {
-            var neuron = this.neighboors[this._id];
-            var influence = this.getVar('aux');
-            var neuron_old = this.getVar(neuron, 'old');
-            if (neuron.selfconnection.gater == this)
-              this.buildSentence(influence, ' = ', neuron_old, this._store_propagation);
+            this._neuron = this.neighboors[this._id];
+            this._influence = this.getVar('aux');
+            this._neuron_old = this.getVar(this._neuron, 'old');
+            if (this._neuron.selfconnection.gater == this)
+              this.buildSentence(this._influence, ' = ', this._neuron_old, this._store_propagation);
             else
-              this.buildSentence(influence, ' = 0', this._store_propagation);
-            for (this._input in this.trace.influences[neuron.ID]) {
-              this._connection = this.trace.influences[neuron.ID][this._input];
-              var connection_weight = this.getVar(this._connection, 'weight');
-              var neuron_activation = this.getVar(this._connection.from, 'activation');
-              this.buildSentence(influence, ' += ', connection_weight, ' * ',
-                neuron_activation, this._store_propagation);
+              this.buildSentence(this._influence, ' = 0', this._store_propagation);
+            for (this._input in this.trace.influences[this._neuron.ID]) {
+              this._connection = this.trace.influences[this._neuron.ID][this._input];
+              this._connection_weight = this.getVar(this._connection, 'weight');
+              this._neuron_activation = this.getVar(this._connection.from, 'activation');
+              this.buildSentence(
+                this._influence,
+                ' += ',
+                this._connection_weight,
+                ' * ',
+                this._neuron_activation,
+                this._store_propagation
+              );
             }
-            this._neuron_responsibility = this.getVar(neuron, 'error', 'responsibility', neuron.error.responsibility);
+            this._neuron_responsibility = this.getVar(this._neuron, 'error', 'responsibility', this._neuron.error.responsibility);
             this.buildSentence(
-              responsibility,
+              this._responsibility,
               ' += ',
               this._neuron_responsibility,
               ' * ',
-              influence,
+              this._influence,
               this._store_propagation
             );
           }
-          this.buildSentence(responsibility, ' *= ', derivative, this._store_propagation);
+          this.buildSentence(this._responsibility, ' *= ', this._derivative, this._store_propagation);
 
           for (this._i in this.connections.inputs) {
             this._input = this.connections.inputs[this._i];
@@ -798,7 +832,7 @@ export default class Neuron {
             this.buildSentence(
               this._input_weight,
               ' += ',
-              rate,
+              this._rate,
               ' * ',
               this._gradient,
               this._store_propagation
@@ -806,8 +840,7 @@ export default class Neuron {
           }
         }
       }
-      this.buildSentence(bias, ' += ', rate, ' * ', responsibility,
-        this._store_propagation);
+      this.buildSentence(this._bias, ' += ', this._rate, ' * ', this._responsibility, this._store_propagation);
     }
 
     return {
@@ -852,7 +885,7 @@ export default class Neuron {
   getVar() {
     this._args = Array.prototype.slice.call(arguments);
 
-    if (this._args.length == 1) {
+    if (this._args.length === 1) {
       this._id = '';
 
       if (this._args[0] == 'target') {
@@ -862,10 +895,8 @@ export default class Neuron {
         this._id = this._args[0];
 
       if (this._id in this._variables)
-
         return this._variables[this._id];
       else
-
         return this._variables[this._id] = {
           value: 0,
           id: this._varID++
@@ -907,6 +938,38 @@ export default class Neuron {
     }
 
     return true;
+  }
+
+  static squash = {
+  // eq. 5 & 5'
+    LOGISTIC: (x, derivate) => {
+      if (!derivate)
+        return 1 / (1 + Math.exp(-x));
+      else
+        return 1 / (1 + Math.exp(-x)) * (1 - 1 / (1 + Math.exp(-x)));
+    },
+
+    TANH: (x, derivate) => {
+      if (derivate)
+        return 1 - Math.pow(Math.tanh(x), 2);
+      else
+        return Math.tanh(x);
+    },
+
+    IDENTITY: (x, derivate) => {
+      return derivate ? 1 : x;
+    },
+
+    HLIM: (x, derivate) => {
+      return derivate ? 1 : x > 0 ? 1 : 0;
+    },
+
+    RELU: (x, derivate) => {
+      if (derivate)
+        return x > 0 ? 1 : 0;
+      else
+        return x > 0 ? x : 0;
+    }
   }
 
   static uid() {
