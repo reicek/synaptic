@@ -50,8 +50,7 @@ export default class Neuron {
     this.old = this.state;
 
 // eq. 15
-    this.state = this.selfconnection.gain * this.selfconnection.weight *
-      this.state + this.bias;
+    this.state = this.selfconnection.gain * this.selfconnection.weight * this.state + this.bias;
 
     for (this._i in this.connections.inputs) {
       this._input = this.connections.inputs[this._i];
@@ -63,20 +62,28 @@ export default class Neuron {
 
 // f'(s)
     this.derivative = this.squash(this.state, true);
+    this.updateInfluences();
+
+//  update gated connection's gains
+    for (this._i in this.connections.gated)
+      this.connections.gated[this._i].gain = this.activation;
+
+    return this.activation;
+  }
 
 // update traces
+  updateInfluences() {
     this._influences = [];
-    for (this._id in this.trace.extended) {
+    for (this._i in this.trace.extended) {
       // extended elegibility trace
-      this._neuron = this.neighboors[this._id];
+      this._neuron = this.neighboors[this._i];
 
       // if gated neuron's selfconnection is gated by this unit, the influence keeps track of the neuron's old state
       this._influence = this._neuron.selfconnection.gater == this ? this._neuron.old : 0;
 
       // index runs over all the incoming connections to the gated neuron that are gated by this unit
-      for (this._incoming in this.trace.influences[this._neuron.ID]) { // captures the effect that has an input connection to this unit, on a neuron that is gated by this unit
-        this._influence += this.trace.influences[this._neuron.ID][this._incoming].weight * this.trace.influences[this._neuron.ID][this._incoming].from.activation;
-      }
+      for (this._j in this.trace.influences[this._neuron.ID]) // captures the effect that has an input connection to this unit, on a neuron that is gated by this unit
+        this._influence += this.trace.influences[this._neuron.ID][this._j].weight * this.trace.influences[this._neuron.ID][this._j].from.activation;
 
       this._influences[this._neuron.ID] = this._influence;
     }
@@ -87,23 +94,16 @@ export default class Neuron {
       // elegibility trace - Eq. 17
       this.trace.elegibility[this._input.ID] = this.selfconnection.gain * this.selfconnection.weight * this.trace.elegibility[this._input.ID] + this._input.gain * this._input.from.activation;
 
-      for (this._id in this.trace.extended) {
+      for (this._j in this.trace.extended) {
         // extended elegibility trace
-        this._xtrace = this.trace.extended[this._id];
-        this._neuron = this.neighboors[this._id];
+        this._xtrace = this.trace.extended[this._j];
+        this._neuron = this.neighboors[this._j];
         this._influence = this._influences[this._neuron.ID];
 
         // eq. 18
         this._xtrace[this._input.ID] = this._neuron.selfconnection.gain * this._neuron.selfconnection.weight * this._xtrace[this._input.ID] + this.derivative * this.trace.elegibility[this._input.ID] * this._influence;
       }
     }
-
-//  update gated connection's gains
-    for (this._connection in this.connections.gated) {
-      this.connections.gated[this._connection].gain = this.activation;
-    }
-
-    return this.activation;
   }
 
 // back-propagate the error
@@ -116,8 +116,8 @@ export default class Neuron {
       this.error.responsibility = this.error.projected = target - this.activation; // Eq. 10
     else { // the rest of the neuron compute their error responsibilities by backpropagation
       // error responsibilities from all the connections projected from this neuron
-      for (this._id in this.connections.projected) {
-        this._connection = this.connections.projected[this._id];
+      for (this._i in this.connections.projected) {
+        this._connection = this.connections.projected[this._i];
         this._neuron = this._connection.to;
         // Eq. 21
         this._errorCount += this._neuron.error.responsibility * this._connection.gain * this._connection.weight;
@@ -128,13 +128,13 @@ export default class Neuron {
 
       this._errorCount = 0;
       // error responsibilities from all the connections gated by this neuron
-      for (this._id in this.trace.extended) {
-        this._neuron = this.neighboors[this._id]; // gated neuron
+      for (this._i in this.trace.extended) {
+        this._neuron = this.neighboors[this._i]; // gated neuron
         this._influence = this._neuron.selfconnection.gater == this ? this._neuron.old : 0; // if gated neuron's selfconnection is gated by this neuron
 
         // index runs over all the connections to the gated neuron that are gated by this neuron
-        for (this._input in this.trace.influences[this._id]) { // captures the effect that the input connection of this neuron have, on a neuron which its input/s is/are gated by this neuron
-          this._influence += this.trace.influences[this._id][this._input].weight * this.trace.influences[
+        for (this._input in this.trace.influences[this._i]) { // captures the effect that the input connection of this neuron have, on a neuron which its input/s is/are gated by this neuron
+          this._influence += this.trace.influences[this._i][this._input].weight * this.trace.influences[
             this._neuron.ID][this._input].from.activation;
         }
         // eq. 22
@@ -149,23 +149,29 @@ export default class Neuron {
     }
 
     // learning rate
-    rate = rate || .1;
-
-    // adjust all the neuron's incoming connections
-    for (this._id in this.connections.inputs) {
-      this._input = this.connections.inputs[this._id];
-
-      // Eq. 24
-      this._gradient = this.error.projected * this.trace.elegibility[this._input.ID];
-      for (this._i in this.trace.extended) {
-        this._neuron = this.neighboors[this._i];
-        this._gradient += this._neuron.error.responsibility * this.trace.extended[this._neuron.ID][this._input.ID];
-      }
-      this._input.weight += rate * this._gradient; // adjust weights - aka learn
-    }
+    rate = this.adjustIncomingConnections(rate);
 
     // adjust bias
     this.bias += rate * this.error.responsibility;
+  }
+
+    // adjust all the neuron's incoming connections
+  adjustIncomingConnections(rate = 0.1) {
+    for (this._i in this.connections.inputs) {
+      this._input = this.connections.inputs[this._i];
+
+      // Eq. 24
+      this._gradient = this.error.projected * this.trace.elegibility[this._input.ID];
+
+      for (this._j in this.trace.extended) {
+        this._neuron = this.neighboors[this._j];
+        this._gradient += this._neuron.error.responsibility * this.trace.extended[this._neuron.ID][this._input.ID];
+      }
+
+      this._input.weight += rate * this._gradient; // adjust weights - aka learn
+    }
+
+    return rate;
   }
 
   project(neuron, weight) {
@@ -194,8 +200,8 @@ export default class Neuron {
     neuron.connections.inputs[this._connection.ID] = this._connection;
     neuron.trace.elegibility[this._connection.ID] = 0;
 
-    for (this._id in neuron.trace.extended) {
-      this._trace = neuron.trace.extended[this._id];
+    for (this._i in neuron.trace.extended) {
+      this._trace = neuron.trace.extended[this._i];
       this._trace[this._connection.ID] = 0;
     }
 
@@ -212,8 +218,8 @@ export default class Neuron {
       this.neighboors[this._neuron.ID] = this._neuron;
       this._xtrace = this.trace.extended[this._neuron.ID] = {};
 
-      for (this._id in this.connections.inputs) {
-        this._input = this.connections.inputs[this._id];
+      for (this._i in this.connections.inputs) {
+        this._input = this.connections.inputs[this._i];
         this._xtrace[this._input.ID] = 0;
       }
     }
@@ -252,19 +258,19 @@ export default class Neuron {
         return false;
     }
 
-    for (this._type in this.connections) {
-      for (this._i in this.connections[this._type]) {
-        this._connection = this.connections[this._type][this._i];
+    for (this._i in this.connections) {
+      for (this._j in this.connections[this._i]) {
+        this._connection = this.connections[this._i][this._j];
 
         switch (true) {
           case (this._connection.to == neuron) :
-            this._result.type = this._type;
+            this._result.type = this._i;
             this._result.connection = this._connection;
 
             return this._result;
 
           case (this._connection.from == neuron) :
-            this._result.type = this._type;
+            this._result.type = this._i;
             this._result.connection = this._connection;
 
             return this._result;
@@ -277,13 +283,13 @@ export default class Neuron {
 
 // clears all the traces (the neuron forgets it's context, but the connections remain intact)
   clear() {
-    for (this._trace in this.trace.elegibility) {
-      this.trace.elegibility[this._trace] = 0;
+    for (this._i in this.trace.elegibility) {
+      this.trace.elegibility[this._i] = 0;
     }
 
-    for (this._trace in this.trace.extended) {
-      for (this._extended in this.trace.extended[this._trace]) {
-        this.trace.extended[this._trace][this._extended] = 0;
+    for (this._i in this.trace.extended) {
+      for (this._j in this.trace.extended[this._i]) {
+        this.trace.extended[this._i][this._j] = 0;
       }
     }
 
@@ -294,9 +300,9 @@ export default class Neuron {
   reset() {
     this.clear();
 
-    for (this._type in this.connections) {
-      for (this._connection in this.connections[this._type]) {
-        this.connections[this._type][this._connection].weight = Math.random() * .2 - .1;
+    for (this._i in this.connections) {
+      for (this._j in this.connections[this._i]) {
+        this.connections[this._i][this._j].weight = Math.random() * .2 - .1;
       }
     }
 
@@ -416,19 +422,21 @@ export default class Neuron {
           break;
       }
 
-      for (this._id in this.trace.extended) {
+      for (this._i in this.trace.extended) {
         // calculate extended elegibility traces in advance
-        this._neuron = this.neighboors[this._id];
+        this._neuron = this.neighboors[this._i];
         this._influence = this.getVar('influences[' + this._neuron.ID + ']');
         this._neuron_old = this.getVar(this._neuron, 'old');
         this._initialized = false;
+
         if (this._neuron.selfconnection.gater == this) {
           this.buildSentence(this._influence, ' = ', this._neuron_old, this._store_trace);
           this._initialized = true;
         }
-        for (this._incoming in this.trace.influences[this._neuron.ID]) {
-          this._incoming_weight = this.getVar(this.trace.influences[this._neuron.ID][this._incoming], 'weight');
-          this._incoming_activation = this.getVar(this.trace.influences[this._neuron.ID][this._incoming].from, 'activation');
+
+        for (this._j in this.trace.influences[this._neuron.ID]) {
+          this._incoming_weight = this.getVar(this.trace.influences[this._neuron.ID][this._j], 'weight');
+          this._incoming_activation = this.getVar(this.trace.influences[this._neuron.ID][this._j].from, 'activation');
 
           if (this._initialized)
             this.buildSentence(this._influence, ' += ', this._incoming_weight, ' * ', this._incoming_activation, this._store_trace);
@@ -501,9 +509,9 @@ export default class Neuron {
           else
             this.buildSentence(this._trace, ' = ', this._input_activation, this._store_trace);
         }
-        for (this._id in this.trace.extended) {
+        for (this._j in this.trace.extended) {
           // extended elegibility trace
-          this._neuron = this.neighboors[this._id];
+          this._neuron = this.neighboors[this._j];
           this._influence = this.getVar('influences[' + this._neuron.ID + ']');
 
           this._trace = this.getVar(this, 'trace', 'elegibility', this._input.ID, this.trace.elegibility[this._input.ID]);
@@ -552,8 +560,8 @@ export default class Neuron {
             this.buildSentence(this._xtrace, ' = ', this._derivative, ' * ', this._trace, ' * ', this._influence, this._store_trace);
         }
       }
-      for (this._connection in this.connections.gated) {
-        this._gated_gain = this.getVar(this.connections.gated[this._connection], 'gain');
+      for (this._i in this.connections.gated) {
+        this._gated_gain = this.getVar(this.connections.gated[this._i], 'gain');
         this.buildSentence(this._gated_gain, ' = ', this._activation, this._store_activation);
       }
     }
@@ -563,8 +571,8 @@ export default class Neuron {
         this._target = this.getVar('target');
         this.buildSentence(this._responsibility, ' = ', this._target, ' - ', this._activation,
           this._store_propagation);
-        for (this._id in this.connections.inputs) {
-          this._input = this.connections.inputs[this._id];
+        for (this._i in this.connections.inputs) {
+          this._input = this.connections.inputs[this._i];
           this._trace = this.getVar(this, 'trace', 'elegibility', this._input.ID, this.trace.elegibility[this._input.ID]);
           this._input_weight = this.getVar(this._input, 'weight');
           this.buildSentence(this._input_weight, ' += ', this._rate, ' * (', this._responsibility, ' * ', this._trace, ')', this._store_propagation);
@@ -573,8 +581,8 @@ export default class Neuron {
       } else {
         if (!this._noProjections && !this._noGates) {
           this._error = this.getVar('aux');
-          for (this._id in this.connections.projected) {
-            this._connection = this.connections.projected[this._id];
+          for (this._i in this.connections.projected) {
+            this._connection = this.connections.projected[this._i];
             this._neuron = this._connection.to;
             this._connection_weight = this.getVar(this._connection, 'weight');
             this._neuron_responsibility = this.getVar(this._neuron, 'error', 'responsibility', this._neuron.error.responsibility);
@@ -604,8 +612,8 @@ export default class Neuron {
           this.buildSentence(this._projected, ' = ', this._derivative, ' * ', this._error, this._store_propagation);
           this.buildSentence(this._error, ' = 0', this._store_propagation);
 
-          for (this._id in this.trace.extended) {
-            this._neuron = this.neighboors[this._id];
+          for (this._i in this.trace.extended) {
+            this._neuron = this.neighboors[this._i];
             this._influence = this.getVar('aux_2');
             this._neuron_old = this.getVar(this._neuron, 'old');
 
@@ -614,8 +622,8 @@ export default class Neuron {
             else
               this.buildSentence(this._influence, ' = 0', this._store_propagation);
 
-            for (this._input in this.trace.influences[this._neuron.ID]) {
-              this._connection = this.trace.influences[this._neuron.ID][this._input];
+            for (this._j in this.trace.influences[this._neuron.ID]) {
+              this._connection = this.trace.influences[this._neuron.ID][this._j];
               this._connection_weight = this.getVar(this._connection, 'weight');
               this._neuron_activation = this.getVar(this._connection.from, 'activation');
               this.buildSentence(this._influence, ' += ', connection_weight, ' * ', this._neuron_activation, this._store_propagation);
@@ -654,8 +662,8 @@ export default class Neuron {
             this._gated,
             this._store_propagation
           );
-          for (this._id in this.connections.inputs) {
-            this._input = this.connections.inputs[this._id];
+          for (this._i in this.connections.inputs) {
+            this._input = this.connections.inputs[this._i];
             this._gradient = this.getVar('aux');
             this._trace = this.getVar(
               this,
@@ -672,8 +680,8 @@ export default class Neuron {
               this._trace,
               this._store_propagation
             );
-            for (this._id in this.trace.extended) {
-              this._neuron = this.neighboors[this._id];
+            for (this._j in this.trace.extended) {
+              this._neuron = this.neighboors[this._j];
               this._neuron_responsibility = this.getVar(
                 this._neuron,
                 'error',
@@ -710,8 +718,8 @@ export default class Neuron {
 
         } else if (this._noGates) {
           this.buildSentence(this._responsibility, ' = 0', this._store_propagation);
-          for (this._id in this.connections.projected) {
-            this._connection = this.connections.projected[this._id];
+          for (this._i in this.connections.projected) {
+            this._connection = this.connections.projected[this._i];
             this._neuron = this._connection.to;
             this._connection_weight = this.getVar(this._connection, 'weight');
             this._neuron_responsibility = this.getVar(this._neuron, 'error', 'responsibility', this._neuron.error.responsibility);
@@ -741,8 +749,8 @@ export default class Neuron {
 
           this.buildSentence(this._responsibility, ' *= ', this._derivative,this._store_propagation);
 
-          for (this._id in this.connections.inputs) {
-            this._input = this.connections.inputs[this._id];
+          for (this._i in this.connections.inputs) {
+            this._input = this.connections.inputs[this._i];
             this._trace = this.getVar(
               this,
               'trace',
@@ -765,16 +773,16 @@ export default class Neuron {
         } else if (this._noProjections) {
           this.buildSentence(this._responsibility, ' = 0', this._store_propagation);
 
-          for (this._id in this.trace.extended) {
-            this._neuron = this.neighboors[this._id];
+          for (this._i in this.trace.extended) {
+            this._neuron = this.neighboors[this._i];
             this._influence = this.getVar('aux');
             this._neuron_old = this.getVar(this._neuron, 'old');
             if (this._neuron.selfconnection.gater == this)
               this.buildSentence(this._influence, ' = ', this._neuron_old, this._store_propagation);
             else
               this.buildSentence(this._influence, ' = 0', this._store_propagation);
-            for (this._input in this.trace.influences[this._neuron.ID]) {
-              this._connection = this.trace.influences[this._neuron.ID][this._input];
+            for (this._j in this.trace.influences[this._neuron.ID]) {
+              this._connection = this.trace.influences[this._neuron.ID][this._j];
               this._connection_weight = this.getVar(this._connection, 'weight');
               this._neuron_activation = this.getVar(this._connection.from, 'activation');
               this.buildSentence(
@@ -802,8 +810,8 @@ export default class Neuron {
             this._input = this.connections.inputs[this._i];
             this._gradient = this.getVar('aux');
             this.buildSentence(this._gradient, ' = 0', this._store_propagation);
-            for (this._id in this.trace.extended) {
-              this._neuron = this.neighboors[this._id];
+            for (this._j in this.trace.extended) {
+              this._neuron = this.neighboors[this._j];
               this._neuron_responsibility = this.getVar(
                 this._neuron,
                 'error',
