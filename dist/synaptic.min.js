@@ -2755,6 +2755,8 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
 var _Network2 = __webpack_require__(1);
 
 var _Network3 = _interopRequireDefault(_Network2);
@@ -2779,37 +2781,47 @@ var Perceptron = function (_Network) {
 
     var _this = _possibleConstructorReturn(this, (Perceptron.__proto__ || Object.getPrototypeOf(Perceptron)).call(this));
 
-    var args = Array.prototype.slice.call(arguments); // convert arguments to Array
-    if (args.length < 3) throw new Error('not enough layers (minimum 3) !!');
+    _this.args = Array.prototype.slice.call(arguments); // convert arguments to Array
+    if (_this.args.length < 3) throw new Error('not enough layers (minimum 3) !!');
 
-    var inputs = args.shift(); // first argument
-    var outputs = args.pop(); // last argument
-    var layers = args; // all the arguments in the middle
+    _this._inputs = _this.args.shift(); // first argument
+    _this._outputs = _this.args.pop(); // last argument
+    _this._layers = _this.args; // all the arguments in the middle
 
-    var input = new _Layer2.default(inputs);
-    var hidden = [];
-    var output = new _Layer2.default(outputs);
+    _this._input = new _Layer2.default(_this._inputs);
+    _this._hidden = [];
+    _this._output = new _Layer2.default(_this._outputs);
 
-    var previous = input;
+    _this._previous = _this._input;
 
-    // generate hidden layers
-    for (var i = 0; i < layers.length; i++) {
-      var size = layers[i];
-      var layer = new _Layer2.default(size);
-      hidden.push(layer);
-      previous.project(layer);
-      previous = layer;
-    }
-    previous.project(output);
+    _this.generateHiddenLayers();
+
+    _this._previous.project(_this._output);
 
     // set layers of the neural network
     _this.set({
-      input: input,
-      hidden: hidden,
-      output: output
+      input: _this._input,
+      hidden: _this._hidden,
+      output: _this._output
     });
     return _this;
   }
+
+  // generate hidden layers
+
+
+  _createClass(Perceptron, [{
+    key: 'generateHiddenLayers',
+    value: function generateHiddenLayers() {
+      for (this._i in this._layers) {
+        this._size = this._layers[this._i];
+        this._layer = new _Layer2.default(this._size);
+        this._hidden.push(this._layer);
+        this._previous.project(this._layer);
+        this._previous = this._layer;
+      }
+    }
+  }]);
 
   return Perceptron;
 }(_Network3.default);

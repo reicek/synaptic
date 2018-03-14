@@ -4,35 +4,40 @@ import Layer from '../Layer';
 export default class Perceptron extends Network {
   constructor() {
     super();
-    var args = Array.prototype.slice.call(arguments); // convert arguments to Array
-    if (args.length < 3)
+    this.args = Array.prototype.slice.call(arguments); // convert arguments to Array
+    if (this.args.length < 3)
       throw new Error('not enough layers (minimum 3) !!');
 
-    var inputs = args.shift(); // first argument
-    var outputs = args.pop(); // last argument
-    var layers = args; // all the arguments in the middle
+    this._inputs = this.args.shift(); // first argument
+    this._outputs = this.args.pop(); // last argument
+    this._layers = this.args; // all the arguments in the middle
 
-    var input = new Layer(inputs);
-    var hidden = [];
-    var output = new Layer(outputs);
+    this._input = new Layer(this._inputs);
+    this._hidden = [];
+    this._output = new Layer(this._outputs);
 
-    var previous = input;
+    this._previous = this._input;
 
-    // generate hidden layers
-    for (var i = 0; i < layers.length; i++) {
-      var size = layers[i];
-      var layer = new Layer(size);
-      hidden.push(layer);
-      previous.project(layer);
-      previous = layer;
-    }
-    previous.project(output);
+    this.generateHiddenLayers();
+
+    this._previous.project(this._output);
 
     // set layers of the neural network
     this.set({
-      input: input,
-      hidden: hidden,
-      output: output
+      input: this._input,
+      hidden: this._hidden,
+      output: this._output
     });
+  }
+
+  // generate hidden layers
+  generateHiddenLayers() {
+    for (this._i in this._layers) {
+      this._size = this._layers[this._i];
+      this._layer = new Layer(this._size);
+      this._hidden.push(this._layer);
+      this._previous.project(this._layer);
+      this._previous = this._layer;
+    }
   }
 }
