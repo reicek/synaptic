@@ -151,20 +151,6 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
-// types of connections
-var connectionType = {
-  ALL_TO_ALL: "ALL TO ALL",
-  ONE_TO_ONE: "ONE TO ONE",
-  ALL_TO_ELSE: "ALL TO ELSE"
-};
-
-// types of gates
-var gateType = {
-  INPUT: "INPUT",
-  OUTPUT: "OUTPUT",
-  ONE_TO_ONE: "ONE TO ONE"
-};
-
 var Layer = function () {
   function Layer(size) {
     _classCallCheck(this, Layer);
@@ -175,36 +161,42 @@ var Layer = function () {
     this.connectedTo = [];
 
     while (size--) {
-      var neuron = new _Neuron2.default();
-      this.list.push(neuron);
+      this._neuron = new _Neuron2.default();
+      this.list.push(this._neuron);
     }
   }
 
-  // activates all the neurons in the layer
+  // types of connections
+
+
+  // types of gates
 
 
   _createClass(Layer, [{
     key: 'activate',
-    value: function activate(input) {
 
-      var activations = [];
+
+    // activates all the neurons in the layer
+    value: function activate(input) {
+      this._activations = [];
 
       if (typeof input != 'undefined') {
         if (input.length != this.size) throw new Error('INPUT size and LAYER size must be the same to activate!');
 
-        for (var id in this.list) {
-          var neuron = this.list[id];
-          var activation = neuron.activate(input[id]);
-          activations.push(activation);
+        for (this._i in this.list) {
+          this._neuron = this.list[this._i];
+          this._activation = this._neuron.activate(input[this._i]);
+          this._activations.push(this._activation);
         }
       } else {
-        for (var id in this.list) {
-          var neuron = this.list[id];
-          var activation = neuron.activate();
-          activations.push(activation);
+        for (this._i in this.list) {
+          this._neuron = this.list[this._i];
+          this._activation = this._neuron.activate();
+          this._activations.push(this._activation);
         }
       }
-      return activations;
+
+      return this._activations;
     }
 
     // propagates the error on all the neurons of the layer
@@ -212,19 +204,14 @@ var Layer = function () {
   }, {
     key: 'propagate',
     value: function propagate(rate, target) {
-
       if (typeof target != 'undefined') {
         if (target.length != this.size) throw new Error('TARGET size and LAYER size must be the same to propagate!');
 
-        for (var id = this.list.length - 1; id >= 0; id--) {
-          var neuron = this.list[id];
-          neuron.propagate(rate, target[id]);
+        for (this._i = this.list.length - 1; this._i >= 0; this._i--) {
+          this.list[this._i].propagate(rate, target[this._i]);
         }
-      } else {
-        for (var id = this.list.length - 1; id >= 0; id--) {
-          var neuron = this.list[id];
-          neuron.propagate(rate);
-        }
+      } else for (this._i = this.list.length - 1; this._i >= 0; this._i--) {
+        this.list[this._i].propagate(rate);
       }
     }
 
@@ -246,38 +233,43 @@ var Layer = function () {
   }, {
     key: 'gate',
     value: function gate(connection, type) {
+      switch (true) {
+        case type == Layer.gateType.INPUT:
+          if (connection.to.size != this.size) throw new Error('GATER layer and CONNECTION.TO layer must be the same size in order to gate!');
 
-      if (type == Layer.gateType.INPUT) {
-        if (connection.to.size != this.size) throw new Error('GATER layer and CONNECTION.TO layer must be the same size in order to gate!');
+          for (this._i in connection.to.list) {
+            this._neuron = connection.to.list[this._i];
 
-        for (var id in connection.to.list) {
-          var neuron = connection.to.list[id];
-          var gater = this.list[id];
-          for (var input in neuron.connections.inputs) {
-            var gated = neuron.connections.inputs[input];
-            if (gated.ID in connection.connections) gater.gate(gated);
+            for (this._j in this._neuron.connections.inputs) {
+              this._gated = this._neuron.connections.inputs[this._j];
+
+              if (this._gated.ID in connection.connections) this.list[this._i].gate(this._gated);
+            }
           }
-        }
-      } else if (type == Layer.gateType.OUTPUT) {
-        if (connection.from.size != this.size) throw new Error('GATER layer and CONNECTION.FROM layer must be the same size in order to gate!');
+          break;
 
-        for (var id in connection.from.list) {
-          var neuron = connection.from.list[id];
-          var gater = this.list[id];
-          for (var projected in neuron.connections.projected) {
-            var gated = neuron.connections.projected[projected];
-            if (gated.ID in connection.connections) gater.gate(gated);
+        case type == Layer.gateType.OUTPUT:
+          if (connection.from.size != this.size) throw new Error('GATER layer and CONNECTION.FROM layer must be the same size in order to gate!');
+
+          for (this._i in connection.from.list) {
+            this._neuron = connection.from.list[this._i];
+
+            for (this._j in this._neuron.connections.projected) {
+              this._gated = this._neuron.connections.projected[this._j];
+
+              if (this._gated.ID in connection.connections) this.list[this._i].gate(this._gated);
+            }
           }
-        }
-      } else if (type == Layer.gateType.ONE_TO_ONE) {
-        if (connection.size != this.size) throw new Error('The number of GATER UNITS must be the same as the number of CONNECTIONS to gate!');
+          break;
 
-        for (var id in connection.list) {
-          var gater = this.list[id];
-          var gated = connection.list[id];
-          gater.gate(gated);
-        }
+        case type == Layer.gateType.ONE_TO_ONE:
+          if (connection.size != this.size) throw new Error('The number of GATER UNITS must be the same as the number of CONNECTIONS to gate!');
+
+          for (this._i in connection.list) {
+            this.list[this._i].gate(connection.list[this._i]);
+          }break;
       }
+
       connection.gatedfrom.push({ layer: this, type: type });
     }
 
@@ -286,11 +278,12 @@ var Layer = function () {
   }, {
     key: 'selfconnected',
     value: function selfconnected() {
+      for (this._i in this.list) {
+        this._neuron = this.list[this._i];
 
-      for (var id in this.list) {
-        var neuron = this.list[id];
-        if (!neuron.selfconnected()) return false;
+        if (!this._neuron.selfconnected()) return false;
       }
+
       return true;
     }
 
@@ -299,27 +292,45 @@ var Layer = function () {
   }, {
     key: 'connected',
     value: function connected(layer) {
-      // Check if ALL to ALL connection
-      var connections = 0;
-      for (var here in this.list) {
-        for (var there in layer.list) {
-          var from = this.list[here];
-          var to = layer.list[there];
-          var connected = from.connected(to);
-          if (connected.type == 'projected') connections++;
+      switch (true) {
+        case this.countAllToAll(layer) == this.size * layer.size:
+          return Layer.connectionType.ALL_TO_ALL;
+
+        case this.countOneToOne(layer) == this.size:
+          return Layer.connectionType.ONE_TO_ONE;
+      }
+    }
+
+    // Check if ALL to ALL connection
+
+  }, {
+    key: 'countAllToAll',
+    value: function countAllToAll(layer) {
+      this._connections = 0;
+
+      for (this._i in this.list) {
+        for (this._j in layer.list) {
+          this._connected = this.list[this._i].connected(layer.list[this._j]);
+
+          if (this._connected.type == 'projected') this._connections++;
         }
       }
-      if (connections == this.size * layer.size) return Layer.connectionType.ALL_TO_ALL;
 
-      // Check if ONE to ONE connection
-      connections = 0;
-      for (var neuron in this.list) {
-        var from = this.list[neuron];
-        var to = layer.list[neuron];
-        var connected = from.connected(to);
-        if (connected.type == 'projected') connections++;
+      return this._connections;
+    }
+
+    // Check if ONE to ONE connection
+
+  }, {
+    key: 'countOneToOne',
+    value: function countOneToOne(layer) {
+      this._connections = 0;
+
+      for (this._i in this.list) {
+        this._connected = this.list[this._i].connected(layer.list[this._i]);
+
+        if (this._connected.type == 'projected') this._connections++;
       }
-      if (connections == this.size) return Layer.connectionType.ONE_TO_ONE;
     }
 
     // clears all the neuorns in the layer
@@ -327,9 +338,8 @@ var Layer = function () {
   }, {
     key: 'clear',
     value: function clear() {
-      for (var id in this.list) {
-        var neuron = this.list[id];
-        neuron.clear();
+      for (this._i in this.list) {
+        this.list[this._i].clear();
       }
     }
 
@@ -338,9 +348,8 @@ var Layer = function () {
   }, {
     key: 'reset',
     value: function reset() {
-      for (var id in this.list) {
-        var neuron = this.list[id];
-        neuron.reset();
+      for (this._i in this.list) {
+        this.list[this._i].reset();
       }
     }
 
@@ -356,22 +365,27 @@ var Layer = function () {
 
   }, {
     key: 'add',
-    value: function add(neuron) {
-      neuron = neuron || new _Neuron2.default();
+    value: function add() {
+      var neuron = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : new _Neuron2.default();
+
       this.list.push(neuron);
       this.size++;
     }
   }, {
     key: 'set',
-    value: function set(options) {
-      options = options || {};
+    value: function set() {
+      var options = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
 
-      for (var i in this.list) {
-        var neuron = this.list[i];
-        if (options.label) neuron.label = options.label + '_' + neuron.ID;
-        if (options.squash) neuron.squash = options.squash;
-        if (options.bias) neuron.bias = options.bias;
+      for (this._i in this.list) {
+        this._neuron = this.list[this._i];
+
+        if (options.label) this._neuron.label = options.label + '_' + this._neuron.ID;
+
+        if (options.squash) this._neuron.squash = options.squash;
+
+        if (options.bias) this._neuron.bias = options.bias;
       }
+
       return this;
     }
   }]);
@@ -379,8 +393,16 @@ var Layer = function () {
   return Layer;
 }();
 
-Layer.connectionType = connectionType;
-Layer.gateType = gateType;
+Layer.connectionType = {
+  ALL_TO_ALL: "ALL TO ALL",
+  ONE_TO_ONE: "ONE TO ONE",
+  ALL_TO_ELSE: "ALL TO ELSE"
+};
+Layer.gateType = {
+  INPUT: "INPUT",
+  OUTPUT: "OUTPUT",
+  ONE_TO_ONE: "ONE TO ONE"
+};
 exports.default = Layer;
 
 /***/ }),
